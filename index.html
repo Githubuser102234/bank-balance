@@ -5,49 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Bank Balance</title>
     <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f4f4f4;
-            color: #333;
-            margin: 20px;
-        }
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #4CAF50;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .balance {
-            font-size: 2em;
-            text-align: center;
-            margin-bottom: 20px;
-        }
+        body { font-family: sans-serif; background-color: #f4f4f4; color: #333; margin: 20px; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        h1 { text-align: center; color: #4CAF50; }
+        .balance { font-size: 2em; text-align: center; margin-bottom: 20px; }
+        .edit-button { display: none; padding: 10px; border: none; background-color: #FFC107; color: white; border-radius: 4px; cursor: pointer; float: right; }
+        .edit-form { display: none; margin-top: 20px; }
+        .edit-form input { width: 100%; padding: 8px; margin-bottom: 10px; }
+        .edit-form button { background-color: #4CAF50; color: white; padding: 10px; border: none; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #4CAF50; color: white; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Current Bank Balance</h1>
         <div class="balance" id="bank-balance">$...</div>
+        <button id="edit-button" class="edit-button">Edit Transactions</button>
 
         <h2>Transactions</h2>
         <table>
@@ -62,26 +37,118 @@
             <tbody id="transactions-body">
                 </tbody>
         </table>
+
+        <div id="edit-form" class="edit-form">
+            <h3>Add New Transaction</h3>
+            <input type="text" id="object-input" placeholder="Object">
+            <input type="number" id="amount-input" placeholder="Amount (e.g., -13.04 or 50.00)">
+            <input type="text" id="date-input" placeholder="Date (e.g., 7/18/25)">
+            <button id="add-transaction-button">Add</button>
+        </div>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script>
-      // Your Firebase configuration
-      const firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT_ID.appspot.com",
-        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-        appId: "YOUR_APP_ID"
-      };
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-      // Initialize Firebase
-      firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
+        // Your Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCoy1ov3e0iyu-rj3LVhAIOZxOKtYhP_LM",
+            authDomain: "bank-balance-7182d.firebaseapp.com",
+            projectId: "bank-balance-7182d",
+            storageBucket: "bank-balance-7182d.firebasestorage.app",
+            messagingSenderId: "950823426591",
+            appId: "1:950823426591:web:315867c8caf1538f1e532a",
+            measurementId: "G-RJX14SKXL8"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // References to HTML elements
+        const balanceDisplay = document.getElementById('bank-balance');
+        const transactionsTableBody = document.getElementById('transactions-body');
+        const editButton = document.getElementById('edit-button');
+        const editForm = document.getElementById('edit-form');
+        const objectInput = document.getElementById('object-input');
+        const amountInput = document.getElementById('amount-input');
+        const dateInput = document.getElementById('date-input');
+        const addTransactionButton = document.getElementById('add-transaction-button');
+
+        // Your specific UID for admin access.
+        // Replace this with your actual user UID from the Firebase Authentication console.
+        const ADMIN_UID = "YOUR_ADMIN_UID_HERE";
+
+        // Check user authentication state
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in. Check if they are the admin.
+                if (user.uid === ADMIN_UID) {
+                    editButton.style.display = 'block';
+                }
+            } else {
+                // No user is signed in. Redirect to login page.
+                window.location.href = 'login.html';
+            }
+        });
+
+        // Toggle edit form visibility
+        editButton.addEventListener('click', () => {
+            editForm.style.display = editForm.style.display === 'block' ? 'none' : 'block';
+        });
+
+        // Add a new transaction
+        addTransactionButton.addEventListener('click', async () => {
+            const object = objectInput.value;
+            const amount = parseFloat(amountInput.value);
+            const date = dateInput.value || new Date().toLocaleDateString('en-US');
+            
+            if (object && amount) {
+                await addDoc(collection(db, "transactions"), {
+                    object: object,
+                    amount: amount,
+                    date: date,
+                    timestamp: serverTimestamp() // Use server timestamp for accurate ordering
+                });
+                // Clear inputs
+                objectInput.value = '';
+                amountInput.value = '';
+                dateInput.value = '';
+            }
+        });
+
+        // Real-time listener for transactions
+        const q = query(collection(db, "transactions"), orderBy("timestamp", "asc"));
+        onSnapshot(q, (snapshot) => {
+            let totalBalance = 0;
+            transactionsTableBody.innerHTML = '';
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const transactionAmount = parseFloat(data.amount);
+                totalBalance += transactionAmount;
+
+                const row = transactionsTableBody.insertRow();
+                row.innerHTML = `
+                    <td>${data.object}</td>
+                    <td>$${data.amount}</td>
+                    <td>${data.date}</td>
+                    <td>$${totalBalance.toFixed(2)}</td>
+                `;
+
+                // Add delete button for the admin
+                if (auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
+                    const cell = row.insertCell(4);
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.onclick = async () => {
+                        await deleteDoc(doc.ref);
+                    };
+                    cell.appendChild(deleteButton);
+                }
+            });
+            balanceDisplay.textContent = `$${totalBalance.toFixed(2)}`;
+        });
     </script>
-    
-    <script src="app.js"></script>
 </body>
 </html>

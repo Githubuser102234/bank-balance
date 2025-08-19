@@ -50,9 +50,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-        // Your Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCoy1ov3e0iyu-rj3LVhAIOZxOKtYhP_LM",
             authDomain: "bank-balance-7182d.firebaseapp.com",
@@ -66,7 +65,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // References to HTML elements
         const balanceDisplay = document.getElementById('bank-balance');
         const transactionsTableBody = document.getElementById('transactions-body');
         const editButton = document.getElementById('edit-button');
@@ -76,42 +74,33 @@
         const dateInput = document.getElementById('date-input');
         const addTransactionButton = document.getElementById('add-transaction-button');
 
-        // Your specific UID for admin access.
-        // Replace this with your actual user UID from the Firebase Authentication console.
         const ADMIN_UID = "YOUR_ADMIN_UID_HERE";
 
-        // Check user authentication state
+        // Check authentication state to show/hide the edit button
         onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // User is signed in. Check if they are the admin.
-                if (user.uid === ADMIN_UID) {
-                    editButton.style.display = 'block';
-                }
+            if (user && user.uid === ADMIN_UID) {
+                editButton.style.display = 'block';
             } else {
-                // No user is signed in. Redirect to login page.
-                window.location.href = 'login.html';
+                editButton.style.display = 'none';
             }
         });
 
-        // Toggle edit form visibility
         editButton.addEventListener('click', () => {
             editForm.style.display = editForm.style.display === 'block' ? 'none' : 'block';
         });
 
-        // Add a new transaction
         addTransactionButton.addEventListener('click', async () => {
             const object = objectInput.value;
             const amount = parseFloat(amountInput.value);
             const date = dateInput.value || new Date().toLocaleDateString('en-US');
             
-            if (object && amount) {
+            if (object && !isNaN(amount)) {
                 await addDoc(collection(db, "transactions"), {
                     object: object,
                     amount: amount,
                     date: date,
-                    timestamp: serverTimestamp() // Use server timestamp for accurate ordering
+                    timestamp: serverTimestamp()
                 });
-                // Clear inputs
                 objectInput.value = '';
                 amountInput.value = '';
                 dateInput.value = '';
@@ -136,7 +125,6 @@
                     <td>$${totalBalance.toFixed(2)}</td>
                 `;
 
-                // Add delete button for the admin
                 if (auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
                     const cell = row.insertCell(4);
                     const deleteButton = document.createElement('button');
